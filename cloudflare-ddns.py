@@ -15,9 +15,9 @@ import sys
 import threading
 import time
 import requests
+import netifaces as ni
 
-CONFIG_PATH = os.environ.get('CONFIG_PATH', os.getcwd())
-
+CONFIG_PATH = os.environ.get('CONFIG_PATH', os.path.dirname(os.path.realpath(__file__)) + '/')
 
 class GracefulExit:
     def __init__(self):
@@ -56,12 +56,17 @@ def getIPs():
     global ipv4_enabled
     global ipv6_enabled
     global purgeUnknownRecords
+    global method
+    global interfaces
     if ipv4_enabled:
         try:
-            a = requests.get(
-                "https://1.1.1.1/cdn-cgi/trace").text.split("\n")
-            a.pop()
-            a = dict(s.split("=") for s in a)["ip"]
+            if method == 'http':
+                a = requests.get(
+                        "https://1.1.1.1/cdn-cgi/trace").text.split("\n")
+                a.pop()
+                a = dict(s.split("=") for s in a)["ip"]
+            else:
+                a = ni.ifaddresses(interface)[ni.AF_INET][0]['addr']
         except Exception:
             global shown_ipv4_warning
             if not shown_ipv4_warning:
@@ -71,10 +76,13 @@ def getIPs():
                 deleteEntries("A")
     if ipv6_enabled:
         try:
-            aaaa = requests.get(
-                "https://[2606:4700:4700::1111]/cdn-cgi/trace").text.split("\n")
-            aaaa.pop()
-            aaaa = dict(s.split("=") for s in aaaa)["ip"]
+            if method == 'http':
+                aaaa = requests.get(
+                    "https://[2606:4700:4700::1111]/cdn-cgi/trace").text.split("\n")
+                aaaa.pop()
+                aaaa = dict(s.split("=") for s in aaaa)["ip"]
+            else:
+                aaaa = ni.ifaddresses(interface)[ni.AF_INET6][0]['addr']
         except Exception:
             global shown_ipv6_warning
             if not shown_ipv6_warning:
@@ -208,6 +216,8 @@ if __name__ == '__main__':
     shown_ipv6_warning = False
     ipv4_enabled = True
     ipv6_enabled = True
+    method = 'http'
+    interface = ''
     purgeUnknownRecords = False
 
     if sys.version_info < (3, 5):
@@ -226,9 +236,13 @@ if __name__ == '__main__':
         try:
             ipv4_enabled = config["a"]
             ipv6_enabled = config["aaaa"]
+            method = config["method"]
+            interface = config["interface"]
         except:
             ipv4_enabled = True
             ipv6_enabled = True
+            method = 'http'
+            interface = ''
             print("⚙️ Individually disable IPv4 or IPv6 with new config.json options. Read more about it here: https://github.com/timothymiller/cloudflare-ddns/blob/master/README.md")
         try:
             purgeUnknownRecords = config["purgeUnknownRecords"]
