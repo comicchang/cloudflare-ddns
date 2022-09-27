@@ -82,6 +82,15 @@ Some ISP provided modems only allow port forwarding over IPv4 or IPv6. In this c
 "aaaa": true
 ```
 
+### Method used for getting ip address
+
+If you have multiple network interfaces, or if you are behind nat, you may need to enable alternative way to determine your IP address(es).
+
+```json
+"method": "netif",
+"interface": "ppp0"
+```
+
 ### Other values explained
 
 ```json
