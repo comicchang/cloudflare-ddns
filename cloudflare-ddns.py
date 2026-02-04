@@ -21,6 +21,13 @@ import threading
 import time
 
 CONFIG_PATH = os.environ.get('CONFIG_PATH', os.getcwd())
+if len(sys.argv) > 1 and sys.argv[1] == '--config':
+    if len(sys.argv) > 2:
+        CONFIG_PATH = sys.argv[2]
+    else:
+        print("❓ No config file specified after --config")
+        sys.exit(1)
+
 shown_ipv4_warning = False
 shown_ipv4_warning_secondary = False
 shown_ipv6_warning = False
@@ -326,10 +333,11 @@ if __name__ == '__main__':
 
     config = None
     try:
-        with open(os.path.join(CONFIG_PATH, "config.json")) as config_file:
+        config_file_path = CONFIG_PATH if os.path.isfile(CONFIG_PATH) else os.path.join(CONFIG_PATH, "config.json")
+        with open(config_file_path) as config_file:
             config = json.loads(config_file.read())
-    except:
-        print("😡 Error reading config.json")
+    except Exception as e:
+        print("😡 Error reading config from " + str(CONFIG_PATH) + ": " + str(e))
         # wait 10 seconds to prevent excessive logging on docker auto restart
         time.sleep(10)
 
