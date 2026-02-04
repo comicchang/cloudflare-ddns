@@ -9,6 +9,7 @@
 __version__ = "1.0.3"
 
 import fcntl
+from string import Template
 import json
 import os
 import platform
@@ -66,6 +67,9 @@ def get_ipv6_address(ifname):
                 return ipv6
     return None
 
+
+# Read in all environment variables that have the correct prefix
+ENV_VARS = {key: value for (key, value) in os.environ.items() if key.startswith('CF_DDNS_')}
 
 class GracefulExit:
     def __init__(self):
@@ -314,11 +318,10 @@ def cf_api(endpoint, method, config, headers={}, data=False):
               method + "' request to '" + endpoint + "': " + str(e))
         return None
 
-
 def updateIPs(ips):
     for ip in ips.values():
         commitRecord(ip)
-        updateLoadBalancer(ip)
+        #updateLoadBalancer(ip)
 
 
 if __name__ == '__main__':
@@ -335,7 +338,10 @@ if __name__ == '__main__':
     try:
         config_file_path = CONFIG_PATH if os.path.isfile(CONFIG_PATH) else os.path.join(CONFIG_PATH, "config.json")
         with open(config_file_path) as config_file:
-            config = json.loads(config_file.read())
+            if len(ENV_VARS) != 0:
+                config = json.loads(Template(config_file.read()).safe_substitute(ENV_VARS))
+            else:
+                config = json.loads(config_file.read())
     except Exception as e:
         print("😡 Error reading config from " + str(CONFIG_PATH) + ": " + str(e))
         # wait 10 seconds to prevent excessive logging on docker auto restart
@@ -366,8 +372,8 @@ if __name__ == '__main__':
             print(
                 "⚙️ No config detected for 'ttl' - defaulting to 300 seconds (5 minutes)")
         if ttl < 30:
-            ttl = 30  #
-            print("⚙️ TTL is too low - defaulting to 30 seconds")
+            ttl = 1  #
+            print("⚙️ TTL is too low - defaulting to 1 (auto)")
         if (len(sys.argv) > 1):
             if (sys.argv[1] == "--repeat"):
                 if ipv4_enabled and ipv6_enabled:

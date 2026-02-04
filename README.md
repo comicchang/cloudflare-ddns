@@ -273,11 +273,20 @@ If you have multiple IP addresses and want to load balance between them, you can
   "purgeUnknownRecords": false,
   "ttl": 300
 }
-  "a": true,
-  "aaaa": true,
-  "purgeUnknownRecords": false,
-  "ttl": 300
-}
+```
+
+### Docker environment variable support
+
+Define environmental variables starts with `CF_DDNS_` and use it in config.json
+
+For ex:
+
+```json
+{
+  "cloudflare": [
+    {
+      "authentication": {
+        "api_token": "${CF_DDNS_API_TOKEN}",
 ```
 
 ### 🧹 Optional features
