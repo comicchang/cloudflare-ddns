@@ -360,7 +360,9 @@ fn substitute_env_vars(input: &str) -> String {
 
 pub fn load_legacy_config() -> Result<LegacyConfig, String> {
     let config_path = env::var("CONFIG_PATH").unwrap_or_else(|_| ".".to_string());
-    let path = PathBuf::from(&config_path).join("config.json");
+    let path_buf = PathBuf::from(&config_path);
+    // CONFIG_PATH 可以是文件路径或目录路径：是文件则直接使用，是目录则追加 config.json
+    let path = if path_buf.is_file() { path_buf } else { path_buf.join("config.json") };
 
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Error reading config.json: {e}"))?;

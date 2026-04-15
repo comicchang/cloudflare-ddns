@@ -26,17 +26,35 @@ async fn main() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    // Parse CLI args
+    // 解析 CLI 参数
     let args: Vec<String> = std::env::args().collect();
     let dry_run = args.iter().any(|a| a == "--dry-run");
     let repeat = args.iter().any(|a| a == "--repeat");
 
-    // Check for unknown args (legacy behavior)
-    let known_args = ["--dry-run", "--repeat"];
+    // --config <path>：指定配置文件路径，可以是文件或目录（覆盖 CONFIG_PATH 环境变量）
+    let config_path_override: Option<String> = args.windows(2)
+        .find(|w| w[0] == "--config")
+        .map(|w| w[1].clone());
+    if let Some(ref cp) = config_path_override {
+        std::env::set_var("CONFIG_PATH", cp);
+    }
+
+    // 检查未知参数（兼容旧行为）
+    let mut skip_next = false;
     let unknown: Vec<&str> = args
         .iter()
         .skip(1)
-        .filter(|a| !known_args.contains(&a.as_str()))
+        .filter(|a| {
+            if skip_next {
+                skip_next = false;
+                return false;
+            }
+            if a.as_str() == "--config" {
+                skip_next = true;
+                return false;
+            }
+            !matches!(a.as_str(), "--dry-run" | "--repeat")
+        })
         .map(|a| a.as_str())
         .collect();
 
@@ -562,23 +580,22 @@ mod tests {
                         }
                     }
 
-                    if purge_unknown_records {
-                        for dup_id in &duplicate_ids {
-                            if self.dry_run {
-                                println!("[DRY RUN] Would delete stale record {dup_id}");
-                            } else {
-                                println!("Deleting stale record {dup_id}");
-                                let del_endpoint =
-                                    format!("zones/{}/dns_records/{dup_id}", entry.zone_id);
-                                let _: Option<serde_json::Value> = self
-                                    .cf_api(
-                                        &del_endpoint,
-                                        "DELETE",
-                                        &entry.authentication.api_token,
-                                        None::<&()>.as_ref(),
-                                    )
-                                    .await;
-                            }
+                    // 始终清除同名重复记录，与 purgeUnknownRecords 无关
+                    for dup_id in &duplicate_ids {
+                        if self.dry_run {
+                            println!("[DRY RUN] Would delete stale record {dup_id}");
+                        } else {
+                            println!("Deleting stale record {dup_id}");
+                            let del_endpoint =
+                                format!("zones/{}/dns_records/{dup_id}", entry.zone_id);
+                            let _: Option<serde_json::Value> = self
+                                .cf_api(
+                                    &del_endpoint,
+                                    "DELETE",
+                                    &entry.authentication.api_token,
+                                    None::<&()>.as_ref(),
+                                )
+                                .await;
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 # Private API keys for updating IPv4 & IPv6 addresses on Cloudflare
 config.json
+configs/
 
 # Rust build artifacts
 /target/
