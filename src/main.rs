@@ -32,9 +32,17 @@ async fn main() {
     let repeat = args.iter().any(|a| a == "--repeat");
 
     // --config <path>：指定配置文件路径，可以是文件或目录（覆盖 CONFIG_PATH 环境变量）
-    let config_path_override: Option<String> = args.windows(2)
-        .find(|w| w[0] == "--config")
-        .map(|w| w[1].clone());
+    let config_path_override: Option<String> = match args.iter().position(|a| a == "--config") {
+        Some(i) => match args.get(i + 1).filter(|v| !v.starts_with('-')) {
+            Some(v) => Some(v.clone()),
+            None => {
+                eprintln!("--config 需要指定路径");
+                return;
+            }
+        },
+        None => None,
+    };
+    // 在 tokio 任务启动前设置，不存在并发访问问题
     if let Some(ref cp) = config_path_override {
         std::env::set_var("CONFIG_PATH", cp);
     }
