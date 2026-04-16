@@ -500,7 +500,7 @@ fn detect_local_iface(interface: &str, ip_type: IpType, ppfmt: &PP) -> Vec<IpAdd
                 .iter()
                 .filter(|a| a.name == interface)
                 .map(|a| a.ip())
-                .filter(|ip| matches_ip_type(ip, ip_type) && ip.is_global_())
+                .filter(|ip| matches_ip_type(ip, ip_type))
                 .collect();
             ips.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
             ips.dedup();
@@ -508,7 +508,7 @@ fn detect_local_iface(interface: &str, ip_type: IpType, ppfmt: &PP) -> Vec<IpAdd
                 ppfmt.warningf(
                     pp::EMOJI_WARNING,
                     &format!(
-                        "No global {} address found on interface {interface}",
+                        "No {} address found on interface {interface}",
                         ip_type.describe()
                     ),
                 );
