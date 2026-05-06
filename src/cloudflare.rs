@@ -267,10 +267,13 @@ impl CloudflareHandle {
         zone_id: &str,
         record_type: &str,
         ppfmt: &PP,
-    ) -> Vec<DnsRecord> {
+    ) -> Option<Vec<DnsRecord>> {
         let path = format!("zones/{zone_id}/dns_records?per_page=100&type={record_type}");
         let resp: Option<CfListResponse<DnsRecord>> = self.api_request(reqwest::Method::GET, &path, None::<&()>, ppfmt).await;
-        resp.and_then(|r| r.result).unwrap_or_default()
+        match resp {
+            None => None,
+            Some(r) => Some(r.result.unwrap_or_default()),
+        }
     }
 
     pub async fn list_records_by_name(
@@ -279,9 +282,9 @@ impl CloudflareHandle {
         record_type: &str,
         name: &str,
         ppfmt: &PP,
-    ) -> Vec<DnsRecord> {
-        let records = self.list_records(zone_id, record_type, ppfmt).await;
-        records.into_iter().filter(|r| r.name == name).collect()
+    ) -> Option<Vec<DnsRecord>> {
+        let records = self.list_records(zone_id, record_type, ppfmt).await?;
+        Some(records.into_iter().filter(|r| r.name == name).collect())
     }
 
     fn is_managed_record(&self, record: &DnsRecord) -> bool {
@@ -341,7 +344,10 @@ impl CloudflareHandle {
         dry_run: bool,
         ppfmt: &PP,
     ) -> SetResult {
-        let existing = self.list_records_by_name(zone_id, record_type, fqdn, ppfmt).await;
+        let existing = match self.list_records_by_name(zone_id, record_type, fqdn, ppfmt).await {
+            Some(records) => records,
+            None => return SetResult::Failed,
+        };
         let managed: Vec<&DnsRecord> = existing.iter().filter(|r| self.is_managed_record(r)).collect();
 
         if ips.is_empty() {
@@ -462,7 +468,10 @@ impl CloudflareHandle {
         record_type: &str,
         ppfmt: &PP,
     ) {
-        let existing = self.list_records_by_name(zone_id, record_type, fqdn, ppfmt).await;
+        let existing = match self.list_records_by_name(zone_id, record_type, fqdn, ppfmt).await {
+            Some(records) => records,
+            None => return,
+        };
         for record in &existing {
             if self.is_managed_record(record) {
                 ppfmt.noticef(pp::EMOJI_DELETE, &format!("Deleting record {fqdn} ({})", record.content));
@@ -920,7 +929,7 @@ mod tests {
             .await;
 
         let h = handle(&server.uri());
-        let records = h.list_records("z1", "A", &pp()).await;
+        let records = h.list_records("z1", "A", &pp()).await.unwrap();
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].id, "r1");
         assert_eq!(records[1].id, "r2");
@@ -940,7 +949,7 @@ mod tests {
             .await;
 
         let h = handle(&server.uri());
-        let records = h.list_records_by_name("z1", "A", "a.example.com", &pp()).await;
+        let records = h.list_records_by_name("z1", "A", "a.example.com", &pp()).await.unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].content, "1.2.3.4");
     }

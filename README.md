@@ -383,7 +383,7 @@ volumes:
 | `cloudflare` | array | required | List of zone configurations |
 | `a` | bool | `true` | Enable IPv4 (A record) updates |
 | `aaaa` | bool | `true` | Enable IPv6 (AAAA record) updates |
-| `purgeUnknownRecords` | bool | `false` | Delete stale/duplicate DNS records |
+| `purgeUnknownRecords` | bool | `false` | When no IP is detected, delete all existing records of that type |
 | `ttl` | int | `300` | DNS record TTL in seconds (30-86400, values < 30 become auto) |
 | `ip4_provider` | string | `"cloudflare.trace"` | IPv4 detection provider (same values as `IP4_PROVIDER` env var) |
 | `ip6_provider` | string | `"cloudflare.trace"` | IPv6 detection provider (same values as `IP6_PROVIDER` env var) |

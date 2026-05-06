@@ -350,7 +350,6 @@ async fn update_legacy(
             &ips,
             &legacy.cloudflare,
             legacy.ttl,
-            legacy.purge_unknown_records,
             noop_reported,
         )
         .await;
@@ -502,14 +501,13 @@ impl LegacyDdnsClient {
         ips: &HashMap<String, LegacyIpInfo>,
         config: &[LegacyCloudflareEntry],
         ttl: i64,
-        purge_unknown_records: bool,
         noop_reported: &mut HashSet<String>,
     ) -> (Vec<Message>, bool) {
         let mut messages = Vec::new();
         let mut notify = false;
         for ip in ips.values() {
             let (msgs, changed) = self
-                .commit_record(ip, config, ttl, purge_unknown_records, noop_reported)
+                .commit_record(ip, config, ttl, noop_reported)
                 .await;
             messages.extend(msgs);
             if changed {
@@ -524,7 +522,6 @@ impl LegacyDdnsClient {
         ip: &LegacyIpInfo,
         config: &[LegacyCloudflareEntry],
         ttl: i64,
-        purge_unknown_records: bool,
         noop_reported: &mut HashSet<String>,
     ) -> (Vec<Message>, bool) {
         let mut messages = Vec::new();
@@ -571,33 +568,39 @@ impl LegacyDdnsClient {
                     "zones/{}/dns_records?per_page=100&type={}",
                     entry.zone_id, ip.record_type
                 );
-                let dns_records: Option<LegacyCfResponse<Vec<LegacyDnsRecord>>> =
-                    self.cf_api(&dns_endpoint, "GET", entry, None::<&()>.as_ref())
-                        .await;
+                let dns_records = match self
+                    .cf_api::<LegacyCfResponse<Vec<LegacyDnsRecord>>>(
+                        &dns_endpoint,
+                        "GET",
+                        entry,
+                        None::<&()>.as_ref(),
+                    )
+                    .await
+                {
+                    Some(r) => r,
+                    None => {
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        continue;
+                    }
+                };
 
                 let mut identifier: Option<String> = None;
                 let mut modified = false;
                 let mut duplicate_ids: Vec<String> = Vec::new();
 
-                if let Some(resp) = dns_records {
-                    if let Some(records) = resp.result {
-                        for r in &records {
-                            if r.name == fqdn {
-                                if let Some(ref existing_id) = identifier {
-                                    if r.content == ip.ip {
-                                        duplicate_ids.push(existing_id.clone());
-                                        identifier = Some(r.id.clone());
-                                    } else {
-                                        duplicate_ids.push(r.id.clone());
-                                    }
-                                } else {
-                                    identifier = Some(r.id.clone());
-                                    if r.content != record.content
-                                        || r.proxied != record.proxied
-                                    {
-                                        modified = true;
-                                    }
-                                }
+                for r in dns_records.result.unwrap_or_default().iter() {
+                    if r.name == fqdn {
+                        if let Some(ref existing_id) = identifier {
+                            if r.content == ip.ip {
+                                duplicate_ids.push(existing_id.clone());
+                                identifier = Some(r.id.clone());
+                            } else {
+                                duplicate_ids.push(r.id.clone());
+                            }
+                        } else {
+                            identifier = Some(r.id.clone());
+                            if r.content != record.content || r.proxied != record.proxied {
+                                modified = true;
                             }
                         }
                     }
@@ -647,18 +650,16 @@ impl LegacyDdnsClient {
                     )));
                 }
 
-                if purge_unknown_records {
-                    for dup_id in &duplicate_ids {
-                        if self.dry_run {
-                            println!("[DRY RUN] Would delete stale record {dup_id}");
-                        } else {
-                            println!("Deleting stale record {dup_id}");
-                            let del_endpoint =
-                                format!("zones/{}/dns_records/{dup_id}", entry.zone_id);
-                            let _: Option<serde_json::Value> = self
-                                .cf_api(&del_endpoint, "DELETE", entry, None::<&()>.as_ref())
-                                .await;
-                        }
+                for dup_id in &duplicate_ids {
+                    if self.dry_run {
+                        println!("[DRY RUN] Would delete duplicate record {dup_id}");
+                    } else {
+                        println!("Deleting duplicate record {dup_id}");
+                        let del_endpoint =
+                            format!("zones/{}/dns_records/{dup_id}", entry.zone_id);
+                        let _: Option<serde_json::Value> = self
+                            .cf_api(&del_endpoint, "DELETE", entry, None::<&()>.as_ref())
+                            .await;
                     }
                 }
             }
@@ -1978,7 +1979,7 @@ mod tests {
             subdomains: vec![LegacySubdomainEntry::Simple("@".to_string())],
             proxied: false,
         }];
-        ddns.commit_record(&ip, &config, 300, false, &mut HashSet::new()).await;
+        ddns.commit_record(&ip, &config, 300, &mut HashSet::new()).await;
     }
 
     #[tokio::test]
@@ -2034,7 +2035,7 @@ mod tests {
             subdomains: vec![LegacySubdomainEntry::Simple("@".to_string())],
             proxied: false,
         }];
-        ddns.commit_record(&ip, &config, 300, false, &mut HashSet::new()).await;
+        ddns.commit_record(&ip, &config, 300, &mut HashSet::new()).await;
     }
 
     #[tokio::test]
@@ -2077,7 +2078,7 @@ mod tests {
             proxied: false,
         }];
         // Should not POST
-        ddns.commit_record(&ip, &config, 300, false, &mut HashSet::new()).await;
+        ddns.commit_record(&ip, &config, 300, &mut HashSet::new()).await;
     }
 
     #[tokio::test]
@@ -2130,7 +2131,7 @@ mod tests {
             }],
             proxied: false,
         }];
-        ddns.commit_record(&ip, &config, 300, false, &mut HashSet::new()).await;
+        ddns.commit_record(&ip, &config, 300, &mut HashSet::new()).await;
     }
 
     #[tokio::test]
@@ -2182,7 +2183,7 @@ mod tests {
             subdomains: vec![LegacySubdomainEntry::Simple("@".to_string())],
             proxied: false,
         }];
-        ddns.commit_record(&ip, &config, 300, true, &mut HashSet::new()).await;
+        ddns.commit_record(&ip, &config, 300, &mut HashSet::new()).await;
     }
 
     #[tokio::test]
@@ -2232,7 +2233,7 @@ mod tests {
             subdomains: vec![LegacySubdomainEntry::Simple("@".to_string())],
             proxied: false,
         }];
-        ddns.update_ips(&ips, &config, 300, false, &mut HashSet::new()).await;
+        ddns.update_ips(&ips, &config, 300, &mut HashSet::new()).await;
     }
 
     #[tokio::test]
