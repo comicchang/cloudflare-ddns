@@ -175,7 +175,8 @@ pub async fn update_once(
                     }
                     SetResult::Noop => {
                         if noop_reported.insert(noop_key) {
-                            ppfmt.infof(pp::EMOJI_SKIP, &format!("Record {domain_str} is up to date"));
+                            let ip_strs: Vec<String> = ips.iter().map(|ip| ip.to_string()).collect();
+                            ppfmt.infof(pp::EMOJI_SKIP, &format!("Record({record_type}) {domain_str} -> {} is up to date", ip_strs.join(", ")));
                         }
                     }
                 }
@@ -627,9 +628,9 @@ impl LegacyDdnsClient {
                         )));
                     } else if noop_reported.insert(noop_key) {
                         if self.dry_run {
-                            println!("[DRY RUN] Record {fqdn} is up to date");
+                            println!("[DRY RUN] Record({}) {} -> {} is up to date", ip.record_type, fqdn, ip.ip);
                         } else {
-                            println!("Record {fqdn} is up to date");
+                            println!("Record({}) {} -> {} is up to date", ip.record_type, fqdn, ip.ip);
                         }
                     }
                 } else {
