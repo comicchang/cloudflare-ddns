@@ -1,0 +1,11 @@
+{
+  "mcp": {
+    "context-mode": {
+      "type": "local",
+      "command": [
+        "context-mode"
+      ],
+      "enabled": true
+    }
+  }
+}

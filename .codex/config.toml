@@ -1,0 +1,4 @@
+[mcp_servers."context-mode"]
+type = "stdio"
+command = "context-mode"
+args = []
